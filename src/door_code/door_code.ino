@@ -10,7 +10,7 @@ mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "home/status"
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-#define FIRMWARE_VERSION "0.0.2" 
+#define FIRMWARE_VERSION "0.0.3" 
 
 // detaily sítě
 ***REMOVED***
@@ -29,10 +29,31 @@ const int ledPin = LED_BUILTIN;  // integrovaný pin na EPS8266
 const int lockPin = 14;          // pin pro odemčení zámku
 const int green = 5;             // pin zelené indikační led
 const int red = 4;               // pin červené indikační led
+const int blue = 2;
+
+#define BUTTON_PIN D6 
 
 bool state = false;
+int locked_time = 0;
 
 
+void checkLock(){
+indication();
+
+if (digitalRead(BUTTON_PIN) == LOW) { // Button pressed (active low)
+        locked_time++;
+        digitalWrite(LED_BUILTIN, HIGH);
+        if(locked_time > 100 && state){
+          digitalWrite(lockPin, HIGH);
+          delay(500);
+          digitalWrite(lockPin, LOW);
+          delay(500);
+        }
+    }else{
+      locked_time = 0;
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+}
 
 //odpověď na dotaz dostupnosti
 void mqtt_response(char* message){
@@ -55,8 +76,14 @@ void mqtt_response(char* message){
 
 }
 
+void rgb(bool r,bool g,bool b){
+  digitalWrite(green, 1-g);
+  digitalWrite(red, 1-r);
+  digitalWrite(blue, 1-b);
+}
+
 //přepínání indikačních diod
-void indication(bool state){
+void indication(){
   if(state){
     digitalWrite(green,LOW);
     digitalWrite(red,HIGH);
@@ -106,13 +133,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if(strcmp(topic, mqttLockerTopic) == 0){
     if (message == "1") {
-        digitalWrite(ledPin, HIGH);  // Turn ON LED
-        digitalWrite(lockPin, HIGH);
-        indication(true);
-        delay(500);
-        digitalWrite(ledPin, LOW);
-        digitalWrite(lockPin, LOW);
-        indication(false);
+      state = true;
+      mqtt_response("unlocked");
+    }else if (message == "0") {
+      state = false;
+      mqtt_response("locked");
     }
   }else if(strcmp(topic, mqttAvailableTopic) == 0){
         mqtt_response("alive");
@@ -122,11 +147,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // Function to connect to the MQTT broker
 void reconnect() {
+  rgb(1,0,1);
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("WemosClient", mqttUser, mqttPassword)) {
       Serial.println("connected");
       client.subscribe(mqttLockerTopic);  // Subscribe to the LED control topic
+      client.subscribe(mqttAvailableTopic);
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -137,10 +164,6 @@ void reconnect() {
 }
 
 void setup() {
-  // Initialize serial monitor
-  Serial.begin(115200);
-  Serial.println("setup runned");
-
   pinMode(15,OUTPUT);
   digitalWrite(15,LOW);
 
@@ -150,10 +173,17 @@ void setup() {
   pinMode(green, OUTPUT);
   pinMode(red, OUTPUT);
 
+  //the input if its closed
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
   digitalWrite(ledPin, LOW);  // Start with the LED off
   digitalWrite(lockPin, LOW);
-  digitalWrite(green, HIGH);
-  digitalWrite(red, LOW);
+
+  rgb(1,0,1);
+
+  // Initialize serial monitor
+  Serial.begin(115200);
+  Serial.println("setup runned");
 
   // Connect to Wi-Fi
   setupWifi();
@@ -168,13 +198,15 @@ void setup() {
     client.subscribe(mqttLockerTopic);
     client.subscribe(mqttAvailableTopic);
   }
+
 }
 
 void loop() {
   if (!client.connected()) {
     reconnect();
-  }
-  client.loop();
-  delay(5);
-  //checkLock();
+    }else{
+    client.loop();
+    delay(5);
+    checkLock();
+    }
 }
