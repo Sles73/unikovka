@@ -40,62 +40,52 @@ bool should_be_closed = true;
 
 
 void checkLock(){
-indication();
+  indication();
+  if (digitalRead(BUTTON_PIN) == LOW) { // doors closed (active low)
+    if(millis()%500 < 20){
+      if(state){
+        digitalWrite(lockPin, HIGH);
+        delay(500);
+        digitalWrite(lockPin, LOW);
+        delay(500);
 
-if (digitalRead(BUTTON_PIN) == LOW) { // doors closed (active low)
-
-        //digitalWrite(LED_BUILTIN, HIGH);
-        if(millis()%500 < 20){
-          if(state){
-            digitalWrite(lockPin, HIGH);
-            delay(500);
-            digitalWrite(lockPin, LOW);
-            delay(500);
-
-            opening_retries++;
-            if(opening_retries > 5){
-              mqtt_response("ERROR: can't open");
-            }
-            return;
-          }
-
-          if(should_be_closed == false){
-            should_be_closed =  true;
-            mqtt_response("doors closed");
-          }
+        opening_retries++;
+        if(opening_retries > 5){
+          mqtt_response("ERROR: can't open");
         }
-    }else{                        // doors opened
-      opening_retries = 0;
-
-      if(state == false && millis()%1000 < 10 && should_be_closed == true){ // logic is closed(false) and should closed(true) 
-        mqtt_response("ERROR: states not corespoding");
+        return;
       }
-      //digitalWrite(LED_BUILTIN, LOW);
+
+      if(should_be_closed == false){
+        should_be_closed =  true;
+        mqtt_response("doors closed");
+      }
     }
+  }else{                        // doors opened
+    opening_retries = 0;
+    if(state == false && millis()%1000 < 10 && should_be_closed == true){ // logic is closed(false) and should closed(true) 
+      mqtt_response("ERROR: states not corespoding");
+    }
+  }
 }
 
 //odpověď na dotaz dostupnosti
 void mqtt_response(char* message){
-  // Create a JSON document
   StaticJsonDocument<200> doc;
 
-  // Add device name and elapsed time
   doc["name"] = "Locker";
-  doc["time"] = millis();  // Time in seconds
+  doc["time"] = millis(); 
   doc["firmware_version"] = FIRMWARE_VERSION;
   doc["logic_state"] = state;
   doc["fyzical_state"] = digitalRead(BUTTON_PIN) ? true : false;
   doc["message"] = message;
 
-  // Serialize JSON to string
   String jsonString;
   serializeJson(doc, jsonString);
-  // Output JSON to Serial
-  //Serial.println(jsonString);
   client.publish("room/status", jsonString.c_str());
-
 }
 
+//rgb ledka
 void rgb(bool r,bool g,bool b){
   digitalWrite(green, 1-g);
   digitalWrite(red, 1-r);
@@ -111,6 +101,7 @@ void indication(){
   }
 
 }
+
 // Funkce pro připojení k wifi
 void setupWifi() {
   delay(10);
@@ -140,22 +131,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
   Serial.println(strcmp(topic, mqttAvailableTopic) == 0);
 
-  /*
-  // Control the LED based on received message
-  if (message == "1") {
-    digitalWrite(ledPin, HIGH);  // Turn ON LED
-  } else if (message == "0") {
-    digitalWrite(ledPin, LOW);  // Turn OFF LED
-  }
-  */
-
   if(strcmp(topic, mqttLockerTopic) == 0){
     if (message == "1") {
-      state = true;
+      state = true;     //nastavení logického stavu
       should_be_closed = false;
       mqtt_response("unlocked");
     }else if (message == "0") {
-      state = false;
+      state = false;    //nastavení logického stavu
       mqtt_response("locked");
     }
   }else if(strcmp(topic, mqttAvailableTopic) == 0){
@@ -171,7 +153,7 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("WemosClient", mqttUser, mqttPassword)) {
       Serial.println("connected");
-      client.subscribe(mqttLockerTopic);  // Subscribe to the LED control topic
+      client.subscribe(mqttLockerTopic);  // Subscribe do topiců
       client.subscribe(mqttAvailableTopic);
     } else {
       Serial.print("failed, rc=");
@@ -186,22 +168,21 @@ void setup() {
   pinMode(15,OUTPUT);
   digitalWrite(15,LOW);
 
-  // Setup built-in LED pin
-  //pinMode(ledPin, OUTPUT);
   pinMode(lockPin, OUTPUT);
   pinMode(green, OUTPUT);
   pinMode(red, OUTPUT);
   pinMode(blue, OUTPUT);
 
-  //the input if its closed
+  //nastavení detekce zavřených dvířek
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  //digitalWrite(ledPin, LOW);  // Start with the LED off
+  //pro jistotu nastavení zámku na low
   digitalWrite(lockPin, LOW);
 
+  //indikace načítání fialovou barvou 
   rgb(1,0,1);
 
-  // Initialize serial monitor
+  //Seriový monitor
   Serial.begin(115200);
   Serial.println("setup runned");
 
