@@ -1,8 +1,9 @@
 /*
 comands to test the programe on mosquitto-client
 
-mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "home/led" -m "1"
-mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "home/status"
+mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "room/locker" -m "1"
+mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "room/status"
+mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "room/available"
 
 */
 
@@ -10,12 +11,12 @@ mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "home/status"
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-#define FIRMWARE_VERSION "0.0.3" 
+#define FIRMWARE_VERSION "0.0.4" 
 
 // detaily sítě
 ***REMOVED***
 ***REMOVED***
-const char* mqttServer = "192.168.55.2";
+const char* mqttServer = "192.168.0.114";
 const int mqttPort = 1883;
 const char* mqttUser = "mqtt";
 const char* mqttPassword = "mqtt";
@@ -36,22 +37,44 @@ const int blue = 2;
 bool state = false;
 int locked_time = 0;
 
+short opening_retries = 0;
+bool should_be_closed = true;
+
 
 void checkLock(){
 indication();
 
-if (digitalRead(BUTTON_PIN) == LOW) { // Button pressed (active low)
+if (digitalRead(BUTTON_PIN) == LOW) { // doors closed (active low)
         locked_time++;
-        digitalWrite(LED_BUILTIN, HIGH);
-        if(locked_time > 100 && state){
-          digitalWrite(lockPin, HIGH);
-          delay(500);
-          digitalWrite(lockPin, LOW);
-          delay(500);
+
+        //digitalWrite(LED_BUILTIN, HIGH);
+        if(locked_time > 100){
+          if(state){
+            digitalWrite(lockPin, HIGH);
+            delay(500);
+            digitalWrite(lockPin, LOW);
+            delay(500);
+
+            opening_retries++;
+            if(opening_retries > 5){
+              mqtt_response("ERROR: can't open");
+            }
+            return;
+          }
+
+          if(should_be_closed == false){
+            should_be_closed =  true;
+            mqtt_response("doors closed");
+          }
         }
-    }else{
+    }else{                        // doors opened
       locked_time = 0;
-      digitalWrite(LED_BUILTIN, LOW);
+      opening_retries = 0;
+
+      if(state == false && millis()%1000 < 10 && should_be_closed == true){ // logic is closed(false) and should closed(true) 
+        mqtt_response("ERROR: states not corespoding");
+      }
+      //digitalWrite(LED_BUILTIN, LOW);
     }
 }
 
@@ -64,14 +87,15 @@ void mqtt_response(char* message){
   doc["name"] = "Locker";
   doc["time"] = millis();  // Time in seconds
   doc["firmware_version"] = FIRMWARE_VERSION;
-  doc["state"] = state;
+  doc["logic_state"] = state;
+  doc["fyzical_state"] = digitalRead(BUTTON_PIN);
   doc["message"] = message;
 
   // Serialize JSON to string
   String jsonString;
   serializeJson(doc, jsonString);
   // Output JSON to Serial
-  Serial.println(jsonString);
+  //Serial.println(jsonString);
   client.publish("room/status", jsonString.c_str());
 
 }
@@ -85,11 +109,9 @@ void rgb(bool r,bool g,bool b){
 //přepínání indikačních diod
 void indication(){
   if(state){
-    digitalWrite(green,LOW);
-    digitalWrite(red,HIGH);
+    rgb(0,1,0);
   }else{
-    digitalWrite(green,HIGH);
-    digitalWrite(red,LOW);
+    rgb(1,0,0);
   }
 
 }
@@ -134,6 +156,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if(strcmp(topic, mqttLockerTopic) == 0){
     if (message == "1") {
       state = true;
+      should_be_closed = false;
       mqtt_response("unlocked");
     }else if (message == "0") {
       state = false;
@@ -168,15 +191,16 @@ void setup() {
   digitalWrite(15,LOW);
 
   // Setup built-in LED pin
-  pinMode(ledPin, OUTPUT);
+  //pinMode(ledPin, OUTPUT);
   pinMode(lockPin, OUTPUT);
   pinMode(green, OUTPUT);
   pinMode(red, OUTPUT);
+  pinMode(blue, OUTPUT);
 
   //the input if its closed
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  digitalWrite(ledPin, LOW);  // Start with the LED off
+  //digitalWrite(ledPin, LOW);  // Start with the LED off
   digitalWrite(lockPin, LOW);
 
   rgb(1,0,1);
