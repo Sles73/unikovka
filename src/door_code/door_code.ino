@@ -6,17 +6,16 @@ mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "room/status"
 mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "room/available"
 
 */
+#include "secret.h"
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-#define FIRMWARE_VERSION "0.0.4" 
+#define FIRMWARE_VERSION "0.0.5" 
 
 // detaily sítě
-***REMOVED***
-***REMOVED***
-const char* mqttServer = "192.168.0.114";
+const char* mqttServer = "192.168.55.2";
 const int mqttPort = 1883;
 const char* mqttUser = "mqtt";
 const char* mqttPassword = "mqtt";
@@ -35,7 +34,6 @@ const int blue = 2;
 #define BUTTON_PIN D6 
 
 bool state = false;
-int locked_time = 0;
 
 short opening_retries = 0;
 bool should_be_closed = true;
@@ -45,10 +43,9 @@ void checkLock(){
 indication();
 
 if (digitalRead(BUTTON_PIN) == LOW) { // doors closed (active low)
-        locked_time++;
 
         //digitalWrite(LED_BUILTIN, HIGH);
-        if(locked_time > 100){
+        if(millis()%500 < 20){
           if(state){
             digitalWrite(lockPin, HIGH);
             delay(500);
@@ -68,7 +65,6 @@ if (digitalRead(BUTTON_PIN) == LOW) { // doors closed (active low)
           }
         }
     }else{                        // doors opened
-      locked_time = 0;
       opening_retries = 0;
 
       if(state == false && millis()%1000 < 10 && should_be_closed == true){ // logic is closed(false) and should closed(true) 
@@ -88,7 +84,7 @@ void mqtt_response(char* message){
   doc["time"] = millis();  // Time in seconds
   doc["firmware_version"] = FIRMWARE_VERSION;
   doc["logic_state"] = state;
-  doc["fyzical_state"] = digitalRead(BUTTON_PIN);
+  doc["fyzical_state"] = digitalRead(BUTTON_PIN) ? true : false;
   doc["message"] = message;
 
   // Serialize JSON to string
