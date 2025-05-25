@@ -1,5 +1,5 @@
 /*
-comands to test the programe on mosquitto-client
+comands to test the program on mosquitto-client
 
 mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "home/led" -m "1"
 mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "home/status"
@@ -7,11 +7,10 @@ mosquitto_sub -h localhost -u "mqtt" -P "mqtt" -t "home/status"
 
 #include <ESP8266WiFi.h>  // Use <WiFi.h> if using ESP32
 #include <PubSubClient.h>
-
+#include "secret.h"
 // Replace these with your network a0nd MQTT broker details
-***REMOVED***
-***REMOVED***
-const char* mqttServer = "192.168.55.2";
+
+const char* mqttServer = "192.168.55.146";
 const int mqttPort = 1883;
 const char* mqttUser = "mqtt";
 const char* mqttPassword = "mqtt";
@@ -63,16 +62,16 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(" with message: ");
   Serial.println(message);
 
-  /*
+  
   // Control the LED based on received message
   if (message == "1") {
     digitalWrite(ledPin, HIGH);  // Turn ON LED
   } else if (message == "0") {
     digitalWrite(ledPin, LOW);  // Turn OFF LED
   }
-  */
+  
 
-
+/*
   if (message == "1") {
     digitalWrite(ledPin, HIGH);  // Turn ON LED
     digitalWrite(lockPin, HIGH);
@@ -81,7 +80,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     digitalWrite(ledPin, LOW);
     digitalWrite(lockPin, LOW);
     indication(false);
-  }
+  }*/
 }
 
 // Function to connect to the MQTT broker

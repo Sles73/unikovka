@@ -8,18 +8,18 @@ mosquitto_pub  -h localhost -u "mqtt" -P "mqtt" -t "room/available"
 */
 #include "secret.h"
 
-#include <ESP8266WiFi.h>
+
+
+#include <ESP8266WiFi.h>  // Use <WiFi.h> if using ESP32
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-#define FIRMWARE_VERSION "0.0.5" 
+#define FIRMWARE_VERSION "0.0.6" 
+const char* DEVICE_ID = "dfaa202d";
 
 // detaily sítě
-const char* mqttServer = "192.168.55.2";
-const int mqttPort = 1883;
-const char* mqttUser = "mqtt";
-const char* mqttPassword = "mqtt";
-const char* mqttLockerTopic = "room/locker";
+
+const char* mqttLockerTopic = strcat("devices/",DEVICE_ID);
 const char* mqttAvailableTopic = "room/available";
 
 WiFiClient espClient;
@@ -69,20 +69,34 @@ void checkLock(){
   }
 }
 
+
 //odpověď na dotaz dostupnosti
 void mqtt_response(char* message){
-  StaticJsonDocument<200> doc;
+  DynamicJsonDocument doc(3072);
 
-  doc["name"] = "Locker";
-  doc["time"] = millis(); 
-  doc["firmware_version"] = FIRMWARE_VERSION;
-  doc["logic_state"] = state;
-  doc["fyzical_state"] = digitalRead(BUTTON_PIN) ? true : false;
-  doc["message"] = message;
+  JsonObject headers  = doc.createNestedObject("headers");
+  headers["messageType"] = "deviceStatusEvent";
+  headers["deviceId"] = DEVICE_ID;
+
+
+  JsonObject data  = doc.createNestedObject("data");
+  data["deviceState"] = "ACTIVE";
+
+  JsonObject deviceIdentification  = data.createNestedObject("deviceIdentification");
+  deviceIdentification["deviceType"] = "Locker";
+  deviceIdentification["deviceId"] = DEVICE_ID;
+  
+  JsonObject deviceOptions  = data.createNestedObject("deviceOptions");
+  deviceOptions["logic_state"] = state;
+  deviceOptions["fyzical_state"] = digitalRead(BUTTON_PIN) ? true : false;
+  deviceOptions["message"] = message;
+
 
   String jsonString;
   serializeJson(doc, jsonString);
-  client.publish("room/status", jsonString.c_str());
+  const char* output = jsonString.c_str();
+  client.publish("hub/input", output);
+  //Serial.println(output);
 }
 
 //rgb ledka
@@ -151,7 +165,7 @@ void reconnect() {
   rgb(1,0,1);
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
-    if (client.connect("WemosClient", mqttUser, mqttPassword)) {
+    if (client.connect("WemosClient")) {
       Serial.println("connected");
       client.subscribe(mqttLockerTopic);  // Subscribe do topiců
       client.subscribe(mqttAvailableTopic);
@@ -193,9 +207,12 @@ void setup() {
   client.setServer(mqttServer, mqttPort);
   client.setCallback(callback);
 
+
+
   // Send an initial message when starting up
-  if (client.connect("WemosClient", mqttUser, mqttPassword)) {
+  if (client.connect("WemosClient")) {
     mqtt_response("Started and connected");
+    client.publish("hub/input", "Wemos started");
     client.subscribe(mqttLockerTopic);
     client.subscribe(mqttAvailableTopic);
   }
