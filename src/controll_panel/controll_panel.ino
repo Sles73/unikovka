@@ -110,47 +110,11 @@ if(strcmp(topic, mqttPanelTopic) == 0){
   deserializeJson(doc, message);
 
   for (int i = 0; i < NUMPIXELS; i++) {
-    statuses[i] = String(doc["data"]["deviceOptions"]["componentStatuses"]["status"][i]);
-    incomingHit[i] = doc["data"]["deviceOptions"]["componentStatuses"]["incomingHit"][i];
+    statuses[i] = String(doc["data"]["deviceOptions"]["componentStatuses"][i]["status"]);
+    incomingHit[i] = doc["data"]["deviceOptions"]["componentStatuses"][i]["incomingHit"];
   }
 
 
-  /*
-
-  String colour = String(doc["colour"]);
-  Serial.print("colour: ");
-  Serial.println(colour);
-
-    if (colour == "g") {
-      mqtt_response("green");
-      statuses[0] = "healthy";
-      incomingHit[0] = false;
-    }else if (colour == "bg") {
-      mqtt_response("blinking green");
-      statuses[0] = "healthy";
-      incomingHit[0] = true;
-    }else if (colour == "o") {
-      mqtt_response("orange");
-      statuses[0] = "broken";
-      incomingHit[0] = false;
-    }else if (colour == "bo") {
-      mqtt_response("blinking orange");
-      statuses[0] = "broken";
-      incomingHit[0] = true;
-    }else if (colour == "r") {
-      mqtt_response("red");
-      statuses[0] = "destroyed";
-      incomingHit[0] = false;
-    }else if (colour == "br") {
-      mqtt_response("blinking red");
-      statuses[0] = "destroyed";
-      incomingHit[0] = true;
-    }else if (colour == "off") {
-      mqtt_response("off");
-      statuses[0] = "off";
-      incomingHit[0] = false;
-    }
-    */
   }else if(strcmp(topic, mqttAvailableTopic) == 0){
         mqtt_response("alive");
         Serial.println("alive");

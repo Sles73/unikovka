@@ -1,10 +1,16 @@
 {
   "data": {
     "deviceOptions": {
-      "componentStatuses": {
-        "status": ["broken","destroyed"],
-        "incomingHit": [false,false]
-      }
+      "componentStatuses": [
+        {
+          "status": "healthy",
+          "incomingHit": true
+        },
+        {
+          "status": "destroyed",
+          "incomingHit": false
+        }
+      ]
     }
   }
 }
