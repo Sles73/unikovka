@@ -6,26 +6,27 @@
 #include <ESP8266WiFi.h>  // Use <WiFi.h> if using ESP32
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include "UUID.h"
 #include "secret.h"
 
 #define FIRMWARE_VERSION "0.0.1" 
 
 const char* DEVICE_ID = "dfaa202e";
-
-
 const char* mqttPanelTopic = strcat("devices/",DEVICE_ID);
 const char* mqttAvailableTopic = "room/available";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-#define PIN        D4 
+UUID uuid;
+
+#define PIN       D4 
 #define NUMPIXELS 2 
 
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
-
-int status[NUMPIXELS];
+String statuses[NUMPIXELS];
+bool incomingHit[NUMPIXELS];
 
 
 
@@ -66,14 +67,17 @@ void mqtt_response(char* message){
 
   JsonObject headers  = doc.createNestedObject("headers");
   headers["messageType"] = "deviceStatusEvent";
-  headers["deviceId"] = DEVICE_ID;
+  uuid.generate();
+  headers["messageId"] = uuid;
+
 
 
   JsonObject data  = doc.createNestedObject("data");
   data["deviceState"] = "ACTIVE";
+  
 
   JsonObject deviceIdentification  = data.createNestedObject("deviceIdentification");
-  deviceIdentification["deviceType"] = "Locker";
+  deviceIdentification["deviceType"] = "controllPanel";
   deviceIdentification["deviceId"] = DEVICE_ID;
   
   JsonObject deviceOptions  = data.createNestedObject("deviceOptions");
@@ -101,29 +105,52 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   
 if(strcmp(topic, mqttPanelTopic) == 0){
-  
-    if (message == "g") {
+
+  JsonDocument doc;
+  deserializeJson(doc, message);
+
+  for (int i = 0; i < NUMPIXELS; i++) {
+    statuses[i] = String(doc["data"]["deviceOptions"]["componentStatuses"]["status"][i]);
+    incomingHit[i] = doc["data"]["deviceOptions"]["componentStatuses"]["incomingHit"][i];
+  }
+
+
+  /*
+
+  String colour = String(doc["colour"]);
+  Serial.print("colour: ");
+  Serial.println(colour);
+
+    if (colour == "g") {
       mqtt_response("green");
-      status[0] = 1;
-    }else if (message == "bg") {
+      statuses[0] = "healthy";
+      incomingHit[0] = false;
+    }else if (colour == "bg") {
       mqtt_response("blinking green");
-      status[0] = 2;
-    }else if (message == "o") {
+      statuses[0] = "healthy";
+      incomingHit[0] = true;
+    }else if (colour == "o") {
       mqtt_response("orange");
-      status[0] = 3;
-    }else if (message == "bo") {
+      statuses[0] = "broken";
+      incomingHit[0] = false;
+    }else if (colour == "bo") {
       mqtt_response("blinking orange");
-      status[0] = 4;
-    }else if (message == "r") {
+      statuses[0] = "broken";
+      incomingHit[0] = true;
+    }else if (colour == "r") {
       mqtt_response("red");
-      status[0] = 5;
-    }else if (message == "br") {
+      statuses[0] = "destroyed";
+      incomingHit[0] = false;
+    }else if (colour == "br") {
       mqtt_response("blinking red");
-      status[0] = 6;
-    }else if (message == "off") {
+      statuses[0] = "destroyed";
+      incomingHit[0] = true;
+    }else if (colour == "off") {
       mqtt_response("off");
-      status[0] = 0;
+      statuses[0] = "off";
+      incomingHit[0] = false;
     }
+    */
   }else if(strcmp(topic, mqttAvailableTopic) == 0){
         mqtt_response("alive");
         Serial.println("alive");
@@ -137,7 +164,8 @@ void setup() {
 #endif
 
 for (int i = 0; i < NUMPIXELS; i++) {
-  status[i] = 0;
+  statuses[i] = "healthy";
+  incomingHit[i] = false;
 }
 
 Serial.begin(115200);
@@ -170,34 +198,19 @@ client.loop();
 delay(5);
 
 for(int i=0; i<NUMPIXELS; i++) {
-  if(status[i] == 0){
-    pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-  }else if (status[i] == 1){
-    pixels.setPixelColor(i, pixels.Color(38, 0, 0));
-  }else if (status[i] == 2){
-    if(millis()/250%2==0){
-      pixels.setPixelColor(i, pixels.Color(38, 0, 0));
-    }else{
+  if(millis()/250%2==0 && incomingHit[i]){
       pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-    }
-  }else if (status[i] == 3){
-    pixels.setPixelColor(i, pixels.Color(20, 38, 0));
-  }else if (status[i] == 4){
-    if(millis()/250%2==0){
-      pixels.setPixelColor(i, pixels.Color(20, 38, 0));
     }else{
-      pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+      if(statuses[i] == "healthy"){
+        pixels.setPixelColor(i, pixels.Color(38, 0, 0));
+      }else if(statuses[i] == "broken"){
+        pixels.setPixelColor(i, pixels.Color(20, 38, 0));
+      }else if(statuses[i] == "destroyed"){
+        pixels.setPixelColor(i, pixels.Color(0, 38, 0));
+      }else if(statuses[i] == "off"){
+        pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+      }
     }
-  }else if (status[i] == 5){
-    pixels.setPixelColor(i, pixels.Color(0, 38, 0));
-  }else if (status[i] == 6){
-    if(millis()/250%2==0){
-      pixels.setPixelColor(i, pixels.Color(0, 38, 0));
-    }else{
-      pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-    }
-  }
-  
 }
 pixels.show();
 

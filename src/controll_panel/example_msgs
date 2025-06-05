@@ -1,0 +1,10 @@
+{
+  "data": {
+    "deviceOptions": {
+      "componentStatuses": {
+        "status": ["broken","destroyed"],
+        "incomingHit": [false,false]
+      }
+    }
+  }
+}

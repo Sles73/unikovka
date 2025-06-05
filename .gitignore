@@ -1,2 +1,3 @@
 src/door_code/secret.h
 src/examples/mqtt_PubSub/secret.h
+src/controll_panel/secret.h
